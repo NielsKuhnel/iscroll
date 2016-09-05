@@ -1570,15 +1570,15 @@ IScroll.prototype = {
 	},
     
         
-    //Calls the options.dataset function with the arguments (start, length, callback), where callback is a function that expects the new data.
-    _loadDataSlice: function(start, length) {
+    _loadDataSlice: function(start, length, reload) {
         var _this = this;
         var callback = function(data) {
             _this.updateCache(start, data);
-            _this.updateContent(_this.infiniteElements);
+            _this.reorderInfinite(true);
+            
             for(var i = 0; i < _this.infiniteParticipants.length; i++ ) {                
                 _this.infiniteParticipants[i].updateCache(start, data);
-                _this.infiniteParticipants[i].updateContent(_this.infiniteParticipants[i].infiniteElements);            
+                _this.infiniteParticipants[i].reorderInfinite(true);                
             }            
         };
         _this.updateCache(start, length);
@@ -1587,22 +1587,18 @@ IScroll.prototype = {
 
     //Reloads the data for the cache at the current position, or optionally resets x and/or y positions
     reload: function(resetX, resetY) {
-        this.scrollTo(resetX ? 0 : this.x, resetY ? 0 : this.y);
-        this.cachePhase = null;
-        this.reorderInfinite(true);
+        this.scrollTo(resetX ? 0 : this.x, resetY ? 0 : this.y);               
         for( var i = 0; i < this.infiniteParticipants.length; i++ ) {            
-            this.infiniteParticipants[i].scrollTo(resetX ? 0 : this.infiniteParticipants[i].x, resetY ? 0 : this.infiniteParticipants[i].y);        
-            this.infiniteParticipants[i].cachePhase = null;
-            this.infiniteParticipants[i].reorderInfinite(true);
+            this.infiniteParticipants[i].scrollTo(resetX ? 0 : this.infiniteParticipants[i].x, resetY ? 0 : this.infiniteParticipants[i].y);                    
         }
                
-        // this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
+        this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
     },
         
 
 
 	// TO-DO: clean up the mess^2
-	reorderInfinite: function (reload) {
+	reorderInfinite: function (updatePhase) {
 		var center = -this.y + this.wrapperHeight / 2;
 
 		var minorPhase = Math.max(Math.floor(-this.y / this.infiniteElementHeight) - this.infiniteUpperBufferSize, 0),
@@ -1623,7 +1619,7 @@ IScroll.prototype = {
 				top += this.infiniteElementHeight * this.infiniteLength;
 			}
 
-			if ( this.infiniteElements[i]._top !== top || reload) {
+			if ( this.infiniteElements[i]._top !== top || updatePhase) {
 				this.infiniteElements[i]._phase = top / this.infiniteElementHeight;
 
 				if ( this.infiniteElements[i]._phase < this.options.infiniteLimit ) {
@@ -1639,15 +1635,16 @@ IScroll.prototype = {
 
 			i++;
 		}
-
-		if ( this.cachePhase != cachePhase && (cachePhase === 0 || minorPhase - this.infiniteCacheBuffer > 0) ) {
+        
+		if ( !updatePhase && this.cachePhase != cachePhase && (cachePhase === 0 || minorPhase - this.infiniteCacheBuffer > 0) ) {
 			 this._loadDataSlice(Math.max(cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer, 0), this.options.cacheSize);
 		}
 
 		this.cachePhase = cachePhase;
 
-		this.updateContent(reload ? this.infiniteElements : update);
+		this.updateContent(updatePhase ? this.infiniteElements : update);
 	},
+
 
 	updateContent: function (els) {
 		if ( this.infiniteCache === undefined ) {
