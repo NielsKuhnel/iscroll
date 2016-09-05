@@ -1710,17 +1710,21 @@ IScroll.prototype = {
     //Reloads the data for the cache at the current position, or optionally resets x and/or y positions
     reload: function(resetX, resetY) {
         this.scrollTo(resetX ? 0 : this.x, resetY ? 0 : this.y);
+        this.cachePhase = null;
+        this.reorderInfinite(true);
         for( var i = 0; i < this.infiniteParticipants.length; i++ ) {            
             this.infiniteParticipants[i].scrollTo(resetX ? 0 : this.infiniteParticipants[i].x, resetY ? 0 : this.infiniteParticipants[i].y);        
+            this.infiniteParticipants[i].cachePhase = null;
+            this.infiniteParticipants[i].reorderInfinite(true);
         }
-                
-        this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
+               
+        // this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
     },
         
 
 
-	// TO-DO: clean up the mess
-	reorderInfinite: function () {
+	// TO-DO: clean up the mess^2
+	reorderInfinite: function (reload) {
 		var center = -this.y + this.wrapperHeight / 2;
 
 		var minorPhase = Math.max(Math.floor(-this.y / this.infiniteElementHeight) - this.infiniteUpperBufferSize, 0),
@@ -1741,7 +1745,7 @@ IScroll.prototype = {
 				top += this.infiniteElementHeight * this.infiniteLength;
 			}
 
-			if ( this.infiniteElements[i]._top !== top ) {
+			if ( this.infiniteElements[i]._top !== top || reload) {
 				this.infiniteElements[i]._phase = top / this.infiniteElementHeight;
 
 				if ( this.infiniteElements[i]._phase < this.options.infiniteLimit ) {
@@ -1764,7 +1768,7 @@ IScroll.prototype = {
 
 		this.cachePhase = cachePhase;
 
-		this.updateContent(update);
+		this.updateContent(reload ? this.infiniteElements : update);
 	},
 
 	updateContent: function (els) {
@@ -1773,7 +1777,7 @@ IScroll.prototype = {
 		}
         
 		for ( var i = 0, l = els.length; i < l; i++ ) {            
-            this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase]);            
+            this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase], els[i]._phase >= this.options.infiniteLimit);
 		}
 	},
 
