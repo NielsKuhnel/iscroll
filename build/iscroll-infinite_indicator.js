@@ -312,6 +312,9 @@ function IScroll (el, options) {
 
 		snapThreshold: 0.334,
 
+		infiniteUseTransform: true,
+		deceleration: 0.004,
+
 // INSERT POINT: OPTIONS
 		disablePointer : !utils.hasPointer,
 		disableTouch : utils.hasPointer || !utils.hasTouch,
@@ -377,8 +380,10 @@ function IScroll (el, options) {
 
 	this.options.invertWheelDirection = this.options.invertWheelDirection ? -1 : 1;
 
-	if ( this.options.probeType == 3 ) {
-		this.options.useTransition = false;	}
+	if ( this.options.infiniteElements ) {
+		this.options.probeType = 3;
+	}
+	this.options.infiniteUseTransform = this.options.infiniteUseTransform && this.options.useTransform;
 
 // INSERT POINT: NORMALIZATION
 
@@ -418,6 +423,10 @@ IScroll.prototype = {
 
 		if ( this.options.keyBindings ) {
 			this._initKeys();
+		}
+
+		if ( this.options.infiniteElements ) {
+			this._initInfinite();
 		}
 
 // INSERT POINT: _init
@@ -590,19 +599,13 @@ IScroll.prototype = {
 		this._translate(newX, newY);
 
 /* REPLACE START: _move */
+
 		if ( timestamp - this.startTime > 300 ) {
 			this.startTime = timestamp;
 			this.startX = this.x;
 			this.startY = this.y;
-
-			if ( this.options.probeType == 1 ) {
-				this._execEvent('scroll');
-			}
 		}
 
-		if ( this.options.probeType > 1 ) {
-			this._execEvent('scroll');
-		}
 /* REPLACE END: _move */
 
 	},
@@ -759,13 +762,17 @@ IScroll.prototype = {
 
 		var rect = utils.getRect(this.scroller);
 /* REPLACE START: refresh */
-
 		this.scrollerWidth	= rect.width;
 		this.scrollerHeight	= rect.height;
 
 		this.maxScrollX		= this.wrapperWidth - this.scrollerWidth;
-		this.maxScrollY		= this.wrapperHeight - this.scrollerHeight;
 
+		var limit;
+		if ( this.options.infiniteElements ) {
+            this.options.infiniteLimit = typeof(this.options.infiniteLimit) == "number" && this.options.infiniteLimit >= 0 ? this.options.infiniteLimit : Math.floor(2147483645 / this.infiniteElementHeight);
+			limit = -this.options.infiniteLimit * this.infiniteElementHeight + this.wrapperHeight;
+		}
+		this.maxScrollY		= limit !== undefined ? limit : this.wrapperHeight - this.scrollerHeight;
 /* REPLACE END: refresh */
 
 		this.hasHorizontalScroll	= this.options.scrollX && this.maxScrollX < 0;
@@ -1238,10 +1245,6 @@ IScroll.prototype = {
 
 		this.scrollTo(newX, newY, 0);
 
-		if ( this.options.probeType > 1 ) {
-			this._execEvent('scroll');
-		}
-
 // INSERT POINT: _wheel
 	},
 
@@ -1639,7 +1642,7 @@ IScroll.prototype = {
 			if ( now >= destTime ) {
 				that.isAnimating = false;
 				that._translate(destX, destY);
-				
+
 				if ( !that.resetPosition(that.options.bounceTime) ) {
 					that._execEvent('scrollEnd');
 				}
@@ -1656,15 +1659,139 @@ IScroll.prototype = {
 			if ( that.isAnimating ) {
 				rAF(step);
 			}
-
-			if ( that.options.probeType == 3 ) {
-				that._execEvent('scroll');
-			}
 		}
 
 		this.isAnimating = true;
 		step();
 	},
+	_initInfinite: function () {
+		var el = this.options.infiniteElements;
+
+		this.infiniteElements = typeof el == 'string' ? document.querySelectorAll(el) : el;
+		this.infiniteLength = this.infiniteElements.length;
+		this.infiniteMaster = this.infiniteElements[0];
+		this.infiniteElementHeight = utils.getRect(this.infiniteMaster).height;
+		this.infiniteHeight = this.infiniteLength * this.infiniteElementHeight;
+        
+        //Other infinite scrollers that update with this one. Usefull for linked scroll scenarios.
+        this.infiniteParticipants = this.options.infiniteParticipants || [];
+
+		this.options.cacheSize = this.options.cacheSize || 1000;
+		this.infiniteCacheBuffer = Math.round(this.options.cacheSize / 4);
+
+		//this.infiniteCache = {};
+		this._loadDataSlice(0, this.options.cacheSize);
+
+		this.on('refresh', function () {
+			var elementsPerPage = Math.ceil(this.wrapperHeight / this.infiniteElementHeight);
+			this.infiniteUpperBufferSize = Math.floor((this.infiniteLength - elementsPerPage) / 2);
+			this.reorderInfinite();
+		});
+
+		this.on('scroll', this.reorderInfinite);
+	},
+    
+        
+    //Calls the options.dataset function with the arguments (start, length, callback), where callback is a function that expects the new data.
+    _loadDataSlice: function(start, length) {
+        var _this = this;
+        var callback = function(data) {
+            _this.updateCache(start, data);
+            _this.updateContent(_this.infiniteElements);
+            for(var i = 0; i < _this.infiniteParticipants.length; i++ ) {                
+                _this.infiniteParticipants[i].updateCache(start, data);
+                _this.infiniteParticipants[i].updateContent(_this.infiniteParticipants[i].infiniteElements);            
+            }            
+        };
+        _this.updateCache(start, length);
+        _this.options.dataset.call(this, start, this.options.cacheSize, callback);                            
+    },
+
+    //Reloads the data for the cache at the current position, or optionally resets x and/or y positions
+    reload: function(resetX, resetY) {
+        this.scrollTo(resetX ? 0 : this.x, resetY ? 0 : this.y);
+        for( var i = 0; i < this.infiniteParticipants.length; i++ ) {            
+            this.infiniteParticipants[i].scrollTo(resetX ? 0 : this.infiniteParticipants[i].x, resetY ? 0 : this.infiniteParticipants[i].y);        
+        }
+                
+        this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
+    },
+        
+
+
+	// TO-DO: clean up the mess
+	reorderInfinite: function () {
+		var center = -this.y + this.wrapperHeight / 2;
+
+		var minorPhase = Math.max(Math.floor(-this.y / this.infiniteElementHeight) - this.infiniteUpperBufferSize, 0),
+			majorPhase = Math.floor(minorPhase / this.infiniteLength),
+			phase = minorPhase - majorPhase * this.infiniteLength;
+
+		var top = 0;
+		var i = 0;
+		var update = [];
+
+		//var cachePhase = Math.floor((minorPhase + this.infiniteLength / 2) / this.infiniteCacheBuffer);
+		var cachePhase = Math.floor(minorPhase / this.infiniteCacheBuffer);
+
+		while ( i < this.infiniteLength ) {
+			top = i * this.infiniteElementHeight + majorPhase * this.infiniteHeight;
+
+			if ( phase > i ) {
+				top += this.infiniteElementHeight * this.infiniteLength;
+			}
+
+			if ( this.infiniteElements[i]._top !== top ) {
+				this.infiniteElements[i]._phase = top / this.infiniteElementHeight;
+
+				if ( this.infiniteElements[i]._phase < this.options.infiniteLimit ) {
+					this.infiniteElements[i]._top = top;
+					if ( this.options.infiniteUseTransform ) {
+						this.infiniteElements[i].style[utils.style.transform] = 'translate(0, ' + top + 'px)' + this.translateZ;
+					} else {
+						this.infiniteElements[i].style.top = top + 'px';
+					}
+					update.push(this.infiniteElements[i]);
+				}
+			}
+
+			i++;
+		}
+
+		if ( this.cachePhase != cachePhase && (cachePhase === 0 || minorPhase - this.infiniteCacheBuffer > 0) ) {
+			 this._loadDataSlice(Math.max(cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer, 0), this.options.cacheSize);
+		}
+
+		this.cachePhase = cachePhase;
+
+		this.updateContent(update);
+	},
+
+	updateContent: function (els) {
+		if ( this.infiniteCache === undefined ) {
+			return;
+		}
+        
+		for ( var i = 0, l = els.length; i < l; i++ ) {            
+            this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase]);            
+		}
+	},
+
+	updateCache: function (start, data) {
+		var firstRun = this.infiniteCache === undefined;
+        
+		this.infiniteCache = {};
+
+		for ( var i = 0, l = data.length; i < l; i++ ) {
+			this.infiniteCache[start++] = data[i];
+		}
+
+		if ( firstRun ) {
+			this.updateContent(this.infiniteElements);
+		}
+
+	},
+
 
 	handleEvent: function (e) {
 		switch ( e.type ) {
@@ -1918,15 +2045,6 @@ Indicator.prototype = {
 		newY = this.y + deltaY;
 
 		this._pos(newX, newY);
-
-
-		if ( this.scroller.options.probeType == 1 && timestamp - this.startTime > 300 ) {
-			this.startTime = timestamp;
-			this.scroller._execEvent('scroll');
-		} else if ( this.scroller.options.probeType > 1 ) {
-			this.scroller._execEvent('scroll');
-		}
-
 
 // INSERT POINT: indicator._move
 

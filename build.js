@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+
 var pkg = require('./package.json');
 var fs = require('fs');
 var hint = require("jshint").JSHINT;
@@ -65,7 +66,35 @@ var releases = {
 			'default/handleEvent.js',
 		],
 		postProcessing: [ 'wheel/build.json', 'snap/build.json', 'keys/build.json', 'infinite/build.json', 'probe/build.json' ]
-	}
+	},
+    
+    infinite_indicator: {
+		files: [            
+			'indicator/_initIndicators.js',
+			'wheel/wheel.js',
+			'snap/snap.js',
+			'keys/keys.js',
+			'default/_animate.js',
+            'infinite/infinite.js',
+			'default/handleEvent.js',            
+			'indicator/indicator.js',            
+		],
+		postProcessing: [ 'indicator/build.json', 'wheel/build.json', 'snap/build.json', 'keys/build.json', 'infinite/build.json' ]
+	},
+    
+    all: {
+		files: [            
+			'indicator/_initIndicators.js',
+			'wheel/wheel.js',
+			'snap/snap.js',
+			'keys/keys.js',			
+            'infinite/infinite.js',
+            'probe/_animate.js',
+			'default/handleEvent.js',            
+			'indicator/indicator.js',            
+		],
+		postProcessing: [ 'indicator/build.json', 'wheel/build.json', 'snap/build.json', 'keys/build.json', 'infinite/build.json', 'probe/build.json' ]
+	},
 };
 
 var args = process.argv.slice(2);
@@ -75,7 +104,7 @@ if ( !args.length ) {
 }
 
 if ( args[0] == 'dist' ) {
-	args = ['lite', 'iscroll', 'zoom', 'probe', 'infinite'];
+	args = ['lite', 'iscroll', 'zoom', 'probe', 'infinite', 'infinite_indicator', 'all'];
 }
 
 // Get the list of files
@@ -92,7 +121,7 @@ args.forEach(function (release) {
 function build (release) {
 	var out = '';
 	var value = '';
-
+    
 	var fileList = ['open.js', 'utils.js', 'core.js'];
 
 	fileList = fileList.concat(releases[release].files);

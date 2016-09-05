@@ -278,6 +278,25 @@ var utils = (function () {
 		}
 	};
 
+	me.getRect = function(el) {
+		if (el instanceof SVGElement) {
+			var rect = el.getBoundingClientRect();
+			return {
+				top : rect.top,
+				left : rect.left,
+				width : rect.width,
+				height : rect.height
+			};
+		} else {
+			return {
+				top : el.offsetTop,
+				left : el.offsetLeft,
+				width : el.offsetWidth,
+				height : el.offsetHeight
+			};
+		}
+	};
+
 	return me;
 })();
 function IScroll (el, options) {
@@ -612,12 +631,7 @@ IScroll.prototype = {
 
 		this.isInTransition = 0;
 		this.initiated = 0;
-		this.endTime = utils.getTime();
-
-		// reset if we are outside of the boundaries
-		if ( this.resetPosition(this.options.bounceTime) ) {
-			return;
-		}
+		this.endTime = utils.getTime();        
 
 		this.scrollTo(newX, newY);	// ensures that the last position is rounded
 
@@ -643,7 +657,7 @@ IScroll.prototype = {
 		// start momentum animation if needed
 		if ( this.options.momentum && duration < 300 ) {
 			momentumX = this.hasHorizontalScroll ? utils.momentum(this.x, this.startX, duration, this.maxScrollX, this.options.bounce ? this.wrapperWidth : 0, this.options.deceleration) : { destination: newX, duration: 0 };
-			momentumY = this.hasVerticalScroll ? utils.momentum(this.y, this.startY, duration, this.maxScrollY, this.options.bounce ? this.wrapperHeight : 0, this.options.deceleration) : { destination: newY, duration: 0 };
+			momentumY = this.hasVerticalScroll ? utils.momentum(this.y, this.startY, duration, this.maxScrollY, this.options.bounce ? this.wrapperHeight : 0, this.options.deceleration) : { destination: newY, duration: 0 };            
 			newX = momentumX.destination;
 			newY = momentumY.destination;
 			time = Math.max(momentumX.duration, momentumY.duration);
@@ -668,6 +682,18 @@ IScroll.prototype = {
 		}
 
 // INSERT POINT: _end
+
+        //TODO: freeScroll shouldn't be stopped while we have momentum in at least one direction, just because we go out of bounds in another. Only do the resetPosition thing when both directions are out of bound, and no momentum exists. This is heuristical, but kind of allright, isn't it?
+            
+        var speedX = momentumX ? (Math.max(this.maxScrollX, Math.min(0,newX)) - Math.max(this.maxScrollX, Math.min(this.x,0)))/momentumX.duration : 0;
+        var speedY = momentumY ? (Math.max(this.maxScrollY, Math.min(0,newY)) - Math.max(this.maxScrollY, Math.min(this.y,0)))/momentumY.duration : 0;
+
+        var xout = Math.abs(speedX) < 0.05 || (this.x >= 0 || this.x <= this.maxScrollX);
+        var yout = Math.abs(speedY) < 0.05 || (this.y >= 0 || this.y <= this.maxScrollY);
+        // reset if we are outside of the boundaries        
+		if ( (xout && yout) && this.resetPosition(this.options.bounceTime) ) {			
+            return;
+		}
 
 		if ( newX != this.x || newY != this.y ) {
 			// change easing function when scroller goes out of the boundaries
@@ -728,20 +754,21 @@ IScroll.prototype = {
 	},
 
 	refresh: function () {
-		var rf = this.wrapper.offsetHeight;		// Force reflow
+		utils.getRect(this.wrapper);		// Force reflow
 
 		this.wrapperWidth	= this.wrapper.clientWidth;
 		this.wrapperHeight	= this.wrapper.clientHeight;
 
+		var rect = utils.getRect(this.scroller);
 /* REPLACE START: refresh */
-		this.scrollerWidth	= this.scroller.offsetWidth;
-		this.scrollerHeight	= this.scroller.offsetHeight;
+		this.scrollerWidth	= rect.width;
+		this.scrollerHeight	= rect.height;
 
 		this.maxScrollX		= this.wrapperWidth - this.scrollerWidth;
-		
+
 		var limit;
 		if ( this.options.infiniteElements ) {
-			this.options.infiniteLimit = this.options.infiniteLimit || Math.floor(2147483645 / this.infiniteElementHeight);
+            this.options.infiniteLimit = typeof(this.options.infiniteLimit) == "number" && this.options.infiniteLimit >= 0 ? this.options.infiniteLimit : Math.floor(2147483645 / this.infiniteElementHeight);
 			limit = -this.options.infiniteLimit * this.infiniteElementHeight + this.wrapperHeight;
 		}
 		this.maxScrollY		= limit !== undefined ? limit : this.wrapperHeight - this.scrollerHeight;
@@ -833,6 +860,9 @@ IScroll.prototype = {
 		} else {
 			this._animate(x, y, time, easing.fn);
 		}
+        
+        //TODO: Update infinite scroll. Could be _execEvent("scroll"), but not sure what that would also trigger. This is not very modular.
+        if( this.reorderInfinite ) this.reorderInfinite();
 	},
 
 	scrollToElement: function (el, time, offsetX, offsetY, easing) {
@@ -848,11 +878,13 @@ IScroll.prototype = {
 		pos.top  -= this.wrapperOffset.top;
 
 		// if offsetX/Y are true we center the element to the screen
+		var elRect = utils.getRect(el);
+		var wrapperRect = utils.getRect(this.wrapper);
 		if ( offsetX === true ) {
-			offsetX = Math.round(el.offsetWidth / 2 - this.wrapper.offsetWidth / 2);
+			offsetX = Math.round(elRect.width / 2 - wrapperRect.width / 2);
 		}
 		if ( offsetY === true ) {
-			offsetY = Math.round(el.offsetHeight / 2 - this.wrapper.offsetHeight / 2);
+			offsetY = Math.round(elRect.height / 2 - wrapperRect.height / 2);
 		}
 
 		pos.left -= offsetX || 0;
@@ -1103,7 +1135,8 @@ IScroll.prototype = {
 				x = 0, y,
 				stepX = this.options.snapStepX || this.wrapperWidth,
 				stepY = this.options.snapStepY || this.wrapperHeight,
-				el;
+				el,
+				rect;
 
 			this.pages = [];
 
@@ -1143,7 +1176,8 @@ IScroll.prototype = {
 				n = -1;
 
 				for ( ; i < l; i++ ) {
-					if ( i === 0 || el[i].offsetLeft <= el[i-1].offsetLeft ) {
+					rect = utils.getRect(el[i]);
+					if ( i === 0 || rect.left <= utils.getRect(el[i-1]).left ) {
 						m = 0;
 						n++;
 					}
@@ -1152,16 +1186,16 @@ IScroll.prototype = {
 						this.pages[m] = [];
 					}
 
-					x = Math.max(-el[i].offsetLeft, this.maxScrollX);
-					y = Math.max(-el[i].offsetTop, this.maxScrollY);
-					cx = x - Math.round(el[i].offsetWidth / 2);
-					cy = y - Math.round(el[i].offsetHeight / 2);
+					x = Math.max(-rect.left, this.maxScrollX);
+					y = Math.max(-rect.top, this.maxScrollY);
+					cx = x - Math.round(rect.width / 2);
+					cy = y - Math.round(rect.height / 2);
 
 					this.pages[m][n] = {
 						x: x,
 						y: y,
-						width: el[i].offsetWidth,
-						height: el[i].offsetHeight,
+						width: rect.width,
+						height: rect.height,
 						cx: cx,
 						cy: cy
 					};
@@ -1364,11 +1398,13 @@ IScroll.prototype = {
 		for ( i in keys ) {
 			this.options.keyBindings[i] = this.options.keyBindings[i] || keys[i];
 		}
-
-		utils.addEvent(window, 'keydown', this);
-
+		
+        //Optionally use an element to capture key events instead of using the entire window. Convenient if the iScroll area is not the entire document.
+        var keyListener = this.options.keyListener;
+        keyListener = keyListener ? (typeof keyListener == 'string' ? document.querySelector(keyListener) : keyListener) : window;        
+        utils.addEvent(keyListener, 'keydown', this);        
 		this.on('destroy', function () {
-			utils.removeEvent(window, 'keydown', this);
+			utils.removeEvent(keyListener, 'keydown', this);
 		});
 	},
 
@@ -1457,6 +1493,11 @@ IScroll.prototype = {
 		this.scrollTo(newX, newY, 0);
 
 		this.keyTime = now;
+        
+        if( this.options.keyListener ) {
+            e.preventDefault();
+            e.stopPropagation();            
+        }
 	},
 
 	_animate: function (destX, destY, duration, easingFn) {
@@ -1507,14 +1548,17 @@ IScroll.prototype = {
 		this.infiniteElements = typeof el == 'string' ? document.querySelectorAll(el) : el;
 		this.infiniteLength = this.infiniteElements.length;
 		this.infiniteMaster = this.infiniteElements[0];
-		this.infiniteElementHeight = this.infiniteMaster.offsetHeight;
+		this.infiniteElementHeight = utils.getRect(this.infiniteMaster).height;
 		this.infiniteHeight = this.infiniteLength * this.infiniteElementHeight;
+        
+        //Other infinite scrollers that update with this one. Usefull for linked scroll scenarios.
+        this.infiniteParticipants = this.options.infiniteParticipants || [];
 
 		this.options.cacheSize = this.options.cacheSize || 1000;
 		this.infiniteCacheBuffer = Math.round(this.options.cacheSize / 4);
 
 		//this.infiniteCache = {};
-		this.options.dataset.call(this, 0, this.options.cacheSize);
+		this._loadDataSlice(0, this.options.cacheSize);
 
 		this.on('refresh', function () {
 			var elementsPerPage = Math.ceil(this.wrapperHeight / this.infiniteElementHeight);
@@ -1524,6 +1568,34 @@ IScroll.prototype = {
 
 		this.on('scroll', this.reorderInfinite);
 	},
+    
+        
+    //Calls the options.dataset function with the arguments (start, length, callback), where callback is a function that expects the new data.
+    _loadDataSlice: function(start, length) {
+        var _this = this;
+        var callback = function(data) {
+            _this.updateCache(start, data);
+            _this.updateContent(_this.infiniteElements);
+            for(var i = 0; i < _this.infiniteParticipants.length; i++ ) {                
+                _this.infiniteParticipants[i].updateCache(start, data);
+                _this.infiniteParticipants[i].updateContent(_this.infiniteParticipants[i].infiniteElements);            
+            }            
+        };
+        _this.updateCache(start, length);
+        _this.options.dataset.call(this, start, this.options.cacheSize, callback);                            
+    },
+
+    //Reloads the data for the cache at the current position, or optionally resets x and/or y positions
+    reload: function(resetX, resetY) {
+        this.scrollTo(resetX ? 0 : this.x, resetY ? 0 : this.y);
+        for( var i = 0; i < this.infiniteParticipants.length; i++ ) {            
+            this.infiniteParticipants[i].scrollTo(resetX ? 0 : this.infiniteParticipants[i].x, resetY ? 0 : this.infiniteParticipants[i].y);        
+        }
+                
+        this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
+    },
+        
+
 
 	// TO-DO: clean up the mess
 	reorderInfinite: function () {
@@ -1565,7 +1637,7 @@ IScroll.prototype = {
 		}
 
 		if ( this.cachePhase != cachePhase && (cachePhase === 0 || minorPhase - this.infiniteCacheBuffer > 0) ) {
-			this.options.dataset.call(this, Math.max(cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer, 0), this.options.cacheSize);
+			 this._loadDataSlice(Math.max(cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer, 0), this.options.cacheSize);
 		}
 
 		this.cachePhase = cachePhase;
@@ -1577,15 +1649,15 @@ IScroll.prototype = {
 		if ( this.infiniteCache === undefined ) {
 			return;
 		}
-
-		for ( var i = 0, l = els.length; i < l; i++ ) {
-			this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase]);
+        
+		for ( var i = 0, l = els.length; i < l; i++ ) {            
+            this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase]);            
 		}
 	},
 
 	updateCache: function (start, data) {
 		var firstRun = this.infiniteCache === undefined;
-
+        
 		this.infiniteCache = {};
 
 		for ( var i = 0, l = data.length; i < l; i++ ) {

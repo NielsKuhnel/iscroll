@@ -278,6 +278,25 @@ var utils = (function () {
 		}
 	};
 
+	me.getRect = function(el) {
+		if (el instanceof SVGElement) {
+			var rect = el.getBoundingClientRect();
+			return {
+				top : rect.top,
+				left : rect.left,
+				width : rect.width,
+				height : rect.height
+			};
+		} else {
+			return {
+				top : el.offsetTop,
+				left : el.offsetLeft,
+				width : el.offsetWidth,
+				height : el.offsetHeight
+			};
+		}
+	};
+
 	return me;
 })();
 function IScroll (el, options) {
@@ -573,12 +592,7 @@ IScroll.prototype = {
 
 		this.isInTransition = 0;
 		this.initiated = 0;
-		this.endTime = utils.getTime();
-
-		// reset if we are outside of the boundaries
-		if ( this.resetPosition(this.options.bounceTime) ) {
-			return;
-		}
+		this.endTime = utils.getTime();        
 
 		this.scrollTo(newX, newY);	// ensures that the last position is rounded
 
@@ -604,7 +618,7 @@ IScroll.prototype = {
 		// start momentum animation if needed
 		if ( this.options.momentum && duration < 300 ) {
 			momentumX = this.hasHorizontalScroll ? utils.momentum(this.x, this.startX, duration, this.maxScrollX, this.options.bounce ? this.wrapperWidth : 0, this.options.deceleration) : { destination: newX, duration: 0 };
-			momentumY = this.hasVerticalScroll ? utils.momentum(this.y, this.startY, duration, this.maxScrollY, this.options.bounce ? this.wrapperHeight : 0, this.options.deceleration) : { destination: newY, duration: 0 };
+			momentumY = this.hasVerticalScroll ? utils.momentum(this.y, this.startY, duration, this.maxScrollY, this.options.bounce ? this.wrapperHeight : 0, this.options.deceleration) : { destination: newY, duration: 0 };            
 			newX = momentumX.destination;
 			newY = momentumY.destination;
 			time = Math.max(momentumX.duration, momentumY.duration);
@@ -612,6 +626,18 @@ IScroll.prototype = {
 		}
 
 // INSERT POINT: _end
+
+        //TODO: freeScroll shouldn't be stopped while we have momentum in at least one direction, just because we go out of bounds in another. Only do the resetPosition thing when both directions are out of bound, and no momentum exists. This is heuristical, but kind of allright, isn't it?
+            
+        var speedX = momentumX ? (Math.max(this.maxScrollX, Math.min(0,newX)) - Math.max(this.maxScrollX, Math.min(this.x,0)))/momentumX.duration : 0;
+        var speedY = momentumY ? (Math.max(this.maxScrollY, Math.min(0,newY)) - Math.max(this.maxScrollY, Math.min(this.y,0)))/momentumY.duration : 0;
+
+        var xout = Math.abs(speedX) < 0.05 || (this.x >= 0 || this.x <= this.maxScrollX);
+        var yout = Math.abs(speedY) < 0.05 || (this.y >= 0 || this.y <= this.maxScrollY);
+        // reset if we are outside of the boundaries        
+		if ( (xout && yout) && this.resetPosition(this.options.bounceTime) ) {			
+            return;
+		}
 
 		if ( newX != this.x || newY != this.y ) {
 			// change easing function when scroller goes out of the boundaries
@@ -672,15 +698,16 @@ IScroll.prototype = {
 	},
 
 	refresh: function () {
-		var rf = this.wrapper.offsetHeight;		// Force reflow
+		utils.getRect(this.wrapper);		// Force reflow
 
 		this.wrapperWidth	= this.wrapper.clientWidth;
 		this.wrapperHeight	= this.wrapper.clientHeight;
 
+		var rect = utils.getRect(this.scroller);
 /* REPLACE START: refresh */
 
-		this.scrollerWidth	= this.scroller.offsetWidth;
-		this.scrollerHeight	= this.scroller.offsetHeight;
+		this.scrollerWidth	= rect.width;
+		this.scrollerHeight	= rect.height;
 
 		this.maxScrollX		= this.wrapperWidth - this.scrollerWidth;
 		this.maxScrollY		= this.wrapperHeight - this.scrollerHeight;
@@ -773,6 +800,9 @@ IScroll.prototype = {
 		} else {
 			this._animate(x, y, time, easing.fn);
 		}
+        
+        //TODO: Update infinite scroll. Could be _execEvent("scroll"), but not sure what that would also trigger. This is not very modular.
+        if( this.reorderInfinite ) this.reorderInfinite();
 	},
 
 	scrollToElement: function (el, time, offsetX, offsetY, easing) {
@@ -788,11 +818,13 @@ IScroll.prototype = {
 		pos.top  -= this.wrapperOffset.top;
 
 		// if offsetX/Y are true we center the element to the screen
+		var elRect = utils.getRect(el);
+		var wrapperRect = utils.getRect(this.wrapper);
 		if ( offsetX === true ) {
-			offsetX = Math.round(el.offsetWidth / 2 - this.wrapper.offsetWidth / 2);
+			offsetX = Math.round(elRect.width / 2 - wrapperRect.width / 2);
 		}
 		if ( offsetY === true ) {
-			offsetY = Math.round(el.offsetHeight / 2 - this.wrapper.offsetHeight / 2);
+			offsetY = Math.round(elRect.height / 2 - wrapperRect.height / 2);
 		}
 
 		pos.left -= offsetX || 0;
