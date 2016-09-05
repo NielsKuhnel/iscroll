@@ -27,11 +27,13 @@
 		for ( i in keys ) {
 			this.options.keyBindings[i] = this.options.keyBindings[i] || keys[i];
 		}
-
-		utils.addEvent(window, 'keydown', this);
-
+		
+        //Optionally use an element to capture key events instead of using the entire window. Convenient if the iScroll area is not the entire document.
+        var keyListener = this.options.keyListener;
+        keyListener = keyListener ? (typeof keyListener == 'string' ? document.querySelector(keyListener) : keyListener) : window;        
+        utils.addEvent(keyListener, 'keydown', this);        
 		this.on('destroy', function () {
-			utils.removeEvent(window, 'keydown', this);
+			utils.removeEvent(keyListener, 'keydown', this);
 		});
 	},
 
@@ -120,4 +122,9 @@
 		this.scrollTo(newX, newY, 0);
 
 		this.keyTime = now;
+        
+        if( this.options.keyListener ) {
+            e.preventDefault();
+            e.stopPropagation();            
+        }
 	},
