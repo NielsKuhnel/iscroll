@@ -6,7 +6,7 @@
 
 		var limit;
 		if ( this.options.infiniteElements ) {
-			this.options.infiniteLimit = this.options.infiniteLimit || Math.floor(2147483645 / this.infiniteElementHeight);
+            this.options.infiniteLimit = typeof(this.options.infiniteLimit) == "number" && this.options.infiniteLimit >= 0 ? this.options.infiniteLimit : Math.floor(2147483645 / this.infiniteElementHeight);
 			limit = -this.options.infiniteLimit * this.infiniteElementHeight + this.wrapperHeight;
 		}
 		this.maxScrollY		= limit !== undefined ? limit : this.wrapperHeight - this.scrollerHeight;

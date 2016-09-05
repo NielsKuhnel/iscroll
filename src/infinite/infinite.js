@@ -7,12 +7,15 @@
 		this.infiniteMaster = this.infiniteElements[0];
 		this.infiniteElementHeight = utils.getRect(this.infiniteMaster).height;
 		this.infiniteHeight = this.infiniteLength * this.infiniteElementHeight;
+        
+        //Other infinite scrollers that update with this one. Usefull for linked scroll scenarios.
+        this.infiniteParticipants = this.options.infiniteParticipants || [];
 
 		this.options.cacheSize = this.options.cacheSize || 1000;
 		this.infiniteCacheBuffer = Math.round(this.options.cacheSize / 4);
 
 		//this.infiniteCache = {};
-		this.options.dataset.call(this, 0, this.options.cacheSize);
+		this._loadDataSlice(0, this.options.cacheSize);
 
 		this.on('refresh', function () {
 			var elementsPerPage = Math.ceil(this.wrapperHeight / this.infiniteElementHeight);
@@ -22,6 +25,34 @@
 
 		this.on('scroll', this.reorderInfinite);
 	},
+    
+        
+    //Calls the options.dataset function with the arguments (start, length, callback), where callback is a function that expects the new data.
+    _loadDataSlice: function(start, length) {
+        var _this = this;
+        var callback = function(data) {
+            _this.updateCache(start, data);
+            _this.updateContent(_this.infiniteElements);
+            for(var i = 0; i < _this.infiniteParticipants.length; i++ ) {                
+                _this.infiniteParticipants[i].updateCache(start, data);
+                _this.infiniteParticipants[i].updateContent(_this.infiniteParticipants[i].infiniteElements);            
+            }            
+        };
+        _this.updateCache(start, length);
+        _this.options.dataset.call(this, start, this.options.cacheSize, callback);                            
+    },
+
+    //Reloads the data for the cache at the current position, or optionally resets x and/or y positions
+    reload: function(resetX, resetY) {
+        this.scrollTo(resetX ? 0 : this.x, resetY ? 0 : this.y);
+        for( var i = 0; i < this.infiniteParticipants.length; i++ ) {            
+            this.infiniteParticipants[i].scrollTo(resetX ? 0 : this.infiniteParticipants[i].x, resetY ? 0 : this.infiniteParticipants[i].y);        
+        }
+                
+        this._loadDataSlice(resetY ? 0 : Math.max(this.cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer), this.options.cacheSize);              
+    },
+        
+
 
 	// TO-DO: clean up the mess
 	reorderInfinite: function () {
@@ -63,7 +94,7 @@
 		}
 
 		if ( this.cachePhase != cachePhase && (cachePhase === 0 || minorPhase - this.infiniteCacheBuffer > 0) ) {
-			this.options.dataset.call(this, Math.max(cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer, 0), this.options.cacheSize);
+			 this._loadDataSlice(Math.max(cachePhase * this.infiniteCacheBuffer - this.infiniteCacheBuffer, 0), this.options.cacheSize);
 		}
 
 		this.cachePhase = cachePhase;
@@ -75,15 +106,15 @@
 		if ( this.infiniteCache === undefined ) {
 			return;
 		}
-
-		for ( var i = 0, l = els.length; i < l; i++ ) {
-			this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase]);
+        
+		for ( var i = 0, l = els.length; i < l; i++ ) {            
+            this.options.dataFiller.call(this, els[i], this.infiniteCache[els[i]._phase]);            
 		}
 	},
 
 	updateCache: function (start, data) {
 		var firstRun = this.infiniteCache === undefined;
-
+        
 		this.infiniteCache = {};
 
 		for ( var i = 0, l = data.length; i < l; i++ ) {

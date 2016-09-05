@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+ <link href="http://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> 
+<style type="text/css">
+    body {font-family: Roboto, sans-serif;}
+    
+    #status{color: rgb(33,33,33);font-weight: bold;font-size: 12px;}
+
+    #grid * {
+      box-sizing: border-box;
+    }
+    
+    #grid ul {  
+      display: table;
+      background-color: white;
+      margin: 0;
+      padding: 0;
+      line-height: 0;
+      font-size: 0;
+      list-style: none;      
+    }
+    
+    #grid li {
+        display: table-cell;
+        text-align: center;
+        vertical-align: middle;
+        font-family: Roboto, sans-serif;        
+        height: 50px;
+        width: 250px;
+        -webkit-transform: translate3d(0,0,0)
+    }
+    
+    #grid .head li {
+        font-size: 12px;
+        color: rgb(117,117,117);
+        font-weight: bold;        
+    }
+    
+    #grid ul.body {
+        border-bottom: 1px rgb(224,224,224) solid;
+    }    
+       
+    #grid .body li {
+        font-size: 13px;
+        color: rgb(33,33,33);           
+    }
+        
+    #grid {
+        position: relative;                    
+    }      
+    #tl, #t, #l, #m { overflow: hidden; background-color: white; }     
+        
+    #tl {position:absolute;top:0;left:0;width: 250px;height:50px;z-index: 4; clip: rect(-10px, 260px, 50px, -10px);  } /* Use clip to show that the box is 1 above the fixed left col, but 2 above the background. */
+    #t { position:absolute;top:0;left:0;height: 50px; width: 100%; padding-left: 250px; z-index: 3;}
+        #t .scroller {width:2250px;}    
+    
+    #l { position:absolute;top:0;left: 0; width: 250px; height: 100%; z-index: 2;padding-top: 50px;}
+        #l .scroller {height: 500px; width: 250px;}
+    #m { position:absolute;top:50px;left: 250px; width: 2250px; height: calc(100% - 50px); width: calc(100% - 250px);}
+        #m .scroller {width:2250px; height: 500px;}
+ 
+    /*Infinity scroll*/
+    #l .scroller, #m .scroller {
+        position: absolute;
+    }
+    
+    #l ul.row, #m ul.row {        
+        position: absolute;
+        top: 0;
+        left: 0;
+        -webkit-transform: translateZ(0);
+        -moz-transform: translateZ(0);
+        -ms-transform: translateZ(0);
+        -o-transform: translateZ(0);
+        transform: translateZ(0);        
+    }
+
+    ul.row.body.hover li { background-color: #eee;}      
+    
+    #viewframe {
+        width: 100%;
+        height: 500px;                 
+    }     
+
+    #grid {
+        width: 100%;
+        height: 100%;        
+    }
+
+    .z-depth-1 { box-shadow: 0 2px 5px 0 rgba(0,0,0,0.16),0 2px 10px 0 rgba(0,0,0,0.12); }        
+    .z-depth-2 {    box-shadow: 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.4);}
+    .z-depth-3 {     box-shadow: 0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12), 0 3px 5px -1px rgba(0, 0, 0, 0.4); }
+
+    
+#loader { position: absolute; top: 49px; left: 0; right: 0; z-index: 4; 
+    opacity: 0;    
+    -webkit-transition: opacity 0.5s ease-in-out;
+    -moz-transition: opacity 0.5s ease-in-out;
+    transition: opacity 0.5s ease-in-out;
+}
+#status {display: none;}
+
+/*Progress bar from materialize*/
+        .progress{position:relative;height:3px;display:block;width:100%;background-color:#b3e5fc;border-radius:2px;overflow:hidden}.progress .determinate{position:absolute;top:0;left:0;bottom:0;background-color:#03a9f4;transition:width .3s linear}.progress .indeterminate{background-color:#03a9f4}.progress .indeterminate:before{content:'';position:absolute;background-color:inherit;top:0;left:0;bottom:0;will-change:left, right;-webkit-animation:indeterminate 2.1s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite;animation:indeterminate 2.1s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite}.progress .indeterminate:after{content:'';position:absolute;background-color:inherit;top:0;left:0;bottom:0;will-change:left, right;-webkit-animation:indeterminate-short 2.1s cubic-bezier(0.165, 0.84, 0.44, 1) infinite;animation:indeterminate-short 2.1s cubic-bezier(0.165, 0.84, 0.44, 1) infinite;-webkit-animation-delay:1.15s;animation-delay:1.15s}@-webkit-keyframes indeterminate{0%{left:-35%;right:100%}60%{left:100%;right:-90%}100%{left:100%;right:-90%}}@keyframes indeterminate{0%{left:-35%;right:100%}60%{left:100%;right:-90%}100%{left:100%;right:-90%}}@-webkit-keyframes indeterminate-short{0%{left:-200%;right:100%}60%{left:107%;right:-8%}100%{left:107%;right:-8%}}@keyframes indeterminate-short{0%{left:-200%;right:100%}60%{left:107%;right:-8%}100%{left:107%;right:-8%}}
+</style>
+</head>
+<body>
+
+<div id="status"></div>
+<div id="viewframe" class="z-depth-1">    
+    <!-- Width: 250, height: 50. Rows: 10, Cols: 5000 (shown 11, body: 10) -->    
+    <div id="grid">        
+        <div id="tl" class="z-depth-1">
+            <div class="scroller">
+                <ul class="row head fixed">
+                    <li>Fixed</li>
+                </ul>
+            </div>
+        </div>
+        <div id="t" class="z-depth-1">
+            <div class="scroller" style="width: 2250px;">
+                <ul class="row head">
+                    <li>Name</li>
+                    <li>Age</li>
+                    <li>Col 4</li>
+                    <li>Col 5</li>
+                    <li>Col 6</li>
+                    <li>Col 7</li>
+                    <li>Col 8</li>
+                    <li>Col 9</li>
+                    <li>Col 10</li>
+                </ul>   
+            </div>
+        </div>
+        <div id="l" class="z-depth-1">
+            <div class="scroller">
+                <!-- 15 rows to cache and show data while scrolling. TODO: Script it -->
+                <ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul><ul class="row body fixed"><li>...</li></ul>
+            </div>
+        </div>
+        <div id="m">
+            <div class="scroller">
+                <!-- 15 rows to cache and show data while scrolling. TODO: Script it -->
+                <ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul><ul class="row body"><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li><li>...</li></ul>
+            </div>
+        </div>
+        <div id="loader" class="progress"><div class="indeterminate"></div></div>
+    </div>
+</div>
+
+<script type="text/javascript" src="../../build/iscroll-all.js"></script>
+
+<script>
+var cols = 10;
+
+var nextReq = 0, prevReq = 0, reqs = 0;
+function requestData (start, count, callback) {
+    var req = ++nextReq;
+    ++reqs;
+    document.getElementById("loader").style.opacity = 1;
+    document.getElementById("status").innerText = "Loading...";
+    document.getElementById("status").style.color ="#000";
+
+    setTimeout(function() {               
+        if( --reqs == 0 ) {
+            document.getElementById("loader").style.opacity = 0;
+            document.getElementById("status").style.color ="#aaa";
+            document.getElementById("status").innerText = "Cached #" + start + " - " + (start + count) + "#";
+        }
+        if( req <= prevReq ) return;
+        prevReq = req;
+        var data = [];                
+        for( var i = start; i < start + count; i++) {
+            var row = { id: i, cols: []};
+            for( var j = 0; j < cols; j++ ) {
+                row.cols[j] = "Item " + (i + 1) + "." + (j + 1);
+            }            
+            data.push(row); 
+        }       
+        callback(data);              
+    }, Math.random()*1000);	
+}
+
+function updateContent (el, data) {        
+    if( !data ) {
+        //Data is unavailable. Clear row. (It's probably being loaded.)
+        for(var i = 0, n = el.children.length; i < n; i++ ) {        
+            el.children[i].innerHTML = "";
+        }        
+        return;
+    }	
+    
+    el.setAttribute("data-id", data.id);
+    for(var i = 0, n = el.children.length; i < n; i++ ) {        
+        el.children[i].innerHTML = data.cols[i];
+    }	    
+}
+
+//When the total count has changed. For example, when filtering.
+function setCount(count) {
+    if( count ) {
+        document.querySelector("#m > .scroller").style["height"] = count*50 + "px";
+        mScroll.options.infiniteLimit = count;        
+        lScroll.options.infiniteLimit = count;        
+    } else {
+        mScroll.options.infiniteLimit = Number.max;              
+        lScroll.options.infiniteLimit = Number.max;   
+    }
+    
+    mScroll.refresh();
+    lScroll.refresh();
+}
+
+
+var $tl = document.getElementById("tl");
+var $t = document.getElementById("t");
+var $l = document.getElementById("l");
+var $m = document.getElementById("m");
+
+function defaultOptions(options) {
+    var ops = {
+        mouseWheel: true,
+        disableMouse: false,
+        deceleration: 0.001,
+        bounceTime: 400,
+        
+        cacheSize: 50,
+    }
+    
+    for(var k in options) {
+        ops[k] = options[k];
+    }
+    
+    return ops;
+}
+
+
+var tScroll = new IScroll($t, defaultOptions({
+  scrollX: true,
+  scrollY: false,
+  probeType: 3
+}));
+tScroll.on("scroll", function(){
+  mScroll.scrollTo(this.x, mScroll.y);  
+});
+
+var lScroll = new IScroll($l, defaultOptions({
+  scrollX: false,
+  scrollY: true,
+  probeType: 3,
+  
+    infiniteElements: '#l ul.row',
+    infiniteLimit: 50,    
+    dataset: function() { /*Do nothing. Middle scroller updates. */},
+    dataFiller: updateContent
+}));
+lScroll.on("scroll", function(){
+  mScroll.scrollTo(mScroll.x, this.y);
+});
+
+var mScroll = new IScroll($m, defaultOptions({
+    scrollX: true,
+    scrollY: true,
+    freeScroll: true,    
+    
+    scrollbars: true,
+    interactiveScrollbars: true,      
+    shrinkScrollbars: 'scale',
+    fadeScrollbars: true,
+    probeType: 3,
+
+    infiniteElements: '#m ul.row',
+    infiniteLimit: 50,
+    deceleration: 0.001,
+    dataset: requestData,
+    dataFiller: updateContent,    
+    infiniteParticipants: [ lScroll]      
+}));
+mScroll.on("scroll", function(){
+  tScroll.scrollTo(this.x, 0);  
+  lScroll.scrollTo(0, this.y);
+});
+
+
+setCount(500);
+
+
+</script>
+
+
+</body></html>
